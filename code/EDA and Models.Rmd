@@ -7,7 +7,7 @@ output: github_document
 knitr::opts_chunk$set(echo = FALSE, cache = FALSE, message = FALSE,warning = FALSE)
 ```
 
-```{r}
+```{r,echo = FALSE, cache = FALSE, message = FALSE,warning = FALSE}
 library(tidyverse)
 library(tidymodels)
 library(tidytext)
@@ -456,7 +456,7 @@ juiced <- juice(tree_prep)
 ```{r}
 tune_spec <- rand_forest(
   mtry = tune(),
-  trees = 100,
+  trees = 1000,
   min_n = tune()
 ) %>%
   set_mode("classification") %>%
@@ -532,6 +532,109 @@ final_rf %>%
   fit(readmitted ~ .,
     data = juice(tree_prep) 
   ) %>%
-  vip(geom = "point")
+  vip(geom = "point")+
+  labs(title = 'Importance Variables per Re-admition pacients')
 ```
+
+Some Learning :
+
+* Status change in the conditions not is determinant for Hospitalary - recidivism;
+* Number inpatient has to do with the causes of new hospitalizations.
+* Number of medications has a direct and important relationship for re-hospitalizations.
+
+```{r}
+final_wf <- workflow() %>%
+  add_recipe(readmitted_rec) %>%
+  add_model(final_rf)
+final_res <- final_wf %>%
+  last_fit(readmitted_split)
+
+final_res %>%
+  collect_metrics()
+```
+
+
+### Clusters
+
+```{r}
+database_pca<-data_select%>%
+  filter(diabetesMed=='Yes')%>%
+  select(race:medical_specialty,readmitted,num_lab_procedures:number_diagnoses)
+
+database_pca
+  
+```
+
+
+```{r}
+pca_rec <- recipe(~., data = database_pca) %>%
+  update_role(race, gender,age,weight,medical_specialty,readmitted,readmitted, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+
+pca_prep <- prep(pca_rec)
+
+pca_prep
+```
+
+
+```{r}
+tidied_pca <- tidy(pca_prep, 2)
+tidied_pca %>%
+  filter(component %in% paste0("PC", 1:5)) %>%
+  mutate(component = fct_inorder(component)) %>%
+  ggplot(aes(value, terms, fill = terms)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~component, nrow = 1) +
+  labs(y = NULL)
+```
+
+
+```{r}
+tidied_pca %>%
+  filter(component %in% paste0("PC", 1:4)) %>%
+  group_by(component) %>%
+  top_n(8, abs(value)) %>%
+  ungroup() %>%
+  mutate(terms = reorder_within(terms, abs(value), component)) %>%
+  ggplot(aes(abs(value), terms, fill = value > 0)) +
+  geom_col() +
+  facet_wrap(~component, scales = "free_y") +
+  scale_y_reordered() +
+  labs(
+    x = "Absolute value of contribution",
+    y = NULL, fill = "Readmitted?"
+  )
+```
+
+
+
+
+```{r}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2, label = readmitted)) +
+  geom_point(aes(color = race), alpha = 0.7, size = 1) +
+  geom_text(check_overlap = TRUE, hjust = "inward",size=1) +
+  labs(color = NULL)+
+  labs(title = 'Cluster By Pca')+
+  facet_wrap(~medical_specialty, scales = 'free')
+```
+
+
+
+```{r}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2, label = readmitted)) +
+  geom_point(aes(color = gender), alpha = 0.7, size = 1) +
+  geom_text(check_overlap = TRUE, hjust = "inward",size=2) +
+  labs(color = NULL)+
+  labs(title = 'Cluster By Pca')+
+  facet_wrap(~medical_specialty, scales = 'free')
+```
+
+Final Comments:
+
+* There are four cluster with PCA's;
+* With  this informatio, the most important relevance are: Gender and medical_specialty.
+
 
