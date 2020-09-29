@@ -1,0 +1,125 @@
+---
+title: "Prueba"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = FALSE, message = FALSE,warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(tidytext)
+library(skimr)
+library(scales)
+theme_set(theme_classic())
+```
+
+
+
+## Import Data Set
+
+
+```{r}
+data<-read.csv('../input/dataset_diabetes/diabetic_data.csv')
+```
+
+Some features and Databases Design
+
+
+```{r}
+data<-data%>%
+  mutate_if(is.character,as.factor)
+```
+
+## EDA
+
+```{r}
+data%>%
+  group_by(race)%>%
+  count(sort = TRUE)%>%
+  filter(race!='?')%>%
+  ungroup()%>%
+  mutate(perc=n/sum(n))%>%
+  mutate(race=fct_reorder(race,n))%>%
+  ggplot(aes(reorder(race,perc),perc, fill=race))+
+  geom_col(show.legend = FALSE)+
+  scale_y_continuous(labels = percent)+
+  coord_flip()+
+  labs(title = 'Percent Distribution per Race',
+       x='',
+       y='Total')
+```
+
+
+```{r}
+data%>%
+  group_by(race,gender,medical_specialty)%>%
+  count(sort = TRUE)%>%
+  filter(race!='?',
+         medical_specialty!='?',
+         gender!='Unknown/Invalid')%>%
+  ungroup()%>%
+  ggplot(aes(race,n,fill=medical_specialty))+
+  geom_col(show.legend = FALSE)+
+  facet_wrap(~gender)
+```
+
+
+
+```{r}
+top_medial_specialty<-data%>%
+  filter(medical_specialty!='?')%>%
+  count(medical_specialty,sort = TRUE)%>%
+  top_n(10)
+```
+
+
+```{r}
+data%>%
+  group_by(race,gender,medical_specialty)%>%
+  count(sort = TRUE)%>%
+  filter(race!='?',
+         medical_specialty!='?',
+         gender!='Unknown/Invalid',
+         medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  ungroup()%>%
+  mutate(race=reorder_within(race,n,medical_specialty))%>%
+  ggplot(aes(race,n,fill=gender))+
+  geom_bar(stat = 'identity')+
+  scale_x_reordered()+
+  coord_flip()+
+  facet_wrap(~medical_specialty,scales = 'free_y')+
+  theme(strip.text = element_text(size=4))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title = 'Relation Between Medical Specialty per Gender - Race',
+       subtitle = 'Top 10 in Medical Specialty',
+       x='',
+       y='Total',
+       fill='Gender')
+```
+
+
+```{r}
+data%>%
+  count(readmitted,sort = TRUE)%>%
+  mutate(perc=round(n/sum(n),2))%>%
+  ggplot(aes(readmitted,perc))+
+  geom_col()+
+  scale_y_continuous(labels = percent)+
+  coord_flip()+
+  labs(title = 'Readmitted Frecuency')
+```
+
+```{r}
+data%>%
+  mutate(diag_1=as.numeric(diag_1),
+         diag_2=as.numeric(diag_2),
+         diag_3=as.numeric(diag_3))
+```
+
+
+
+
+
