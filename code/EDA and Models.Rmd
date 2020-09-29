@@ -13,6 +13,8 @@ library(tidymodels)
 library(tidytext)
 library(skimr)
 library(scales)
+library(ggrepel)
+library(skimr)
 theme_set(theme_classic())
 ```
 
@@ -111,15 +113,406 @@ data%>%
   coord_flip()+
   labs(title = 'Readmitted Frecuency')
 ```
+This is the First Feature
+```{r}
+data<-data%>%
+  mutate(diag_1=str_replace_all(diag_1,"[?]",'0'),
+    diag_2=str_replace_all(diag_2,"[?]",'0'),
+    diag_3=str_replace_all(diag_3,"[?]",'0'),
+    weight=str_replace_all(weight,'[?]','0'))%>%
+  filter(medical_specialty!='?',
+         race!='?')%>%
+  mutate(readmitted=if_else(readmitted=='NO','NO','YES'))
+```
+
+
+
+```{r}
+data%>%
+  count(race)
+```
+
+
+```{r}
+# data%>%
+#   mutate(diag_1=as.numeric(diag_1),
+#          diag_2=as.numeric(diag_2),
+#          diag_3=as.numeric(diag_3))%>%
+#   mutate(readmitted=if_else(readmitted=='NO','NO','YES'))%>%
+#   select(race,medical_specialty,diag_1:diag_3,change:readmitted)%>%
+#   janitor::clean_names()%>%
+#   filter(medical_specialty!='?',
+#          race!='?',
+#          medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+#   pivot_longer(diag_1:diag_3,names_to='Diagnosis',values_to='Measure')%>%
+#   group_by(race,medical_specialty,readmitted)%>%
+#   summarize(avg_measure=mean(Measure))%>%
+#   ungroup()
+```
+
 
 ```{r}
 data%>%
   mutate(diag_1=as.numeric(diag_1),
          diag_2=as.numeric(diag_2),
-         diag_3=as.numeric(diag_3))
+         diag_3=as.numeric(diag_3))%>%
+  na.omit()%>%
+  mutate(readmitted=if_else(readmitted=='NO','NO','YES'))%>%
+  select(medical_specialty,diag_1:diag_3,change:readmitted)%>%
+  janitor::clean_names()%>%
+  filter(medical_specialty!='?',
+         medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  pivot_longer(diag_1:diag_3,names_to='Diagnosis',values_to='Measure')%>%
+  group_by(medical_specialty,readmitted)%>%
+  summarize(avg_measure=mean(Measure))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_measure,readmitted))%>%
+  ggplot(aes(avg_measure,medical_specialty,color=readmitted))+
+  geom_errorbar(aes(xmin=0,xmax=avg_measure),width= 0,linetype='dashed')+
+  geom_point(aes(size=avg_measure),show.legend = FALSE)+
+  scale_y_reordered()+
+  guides(color=FALSE)+
+  facet_wrap(~readmitted,scales = 'free')+
+  labs(title = 'Relation Between Type of medical care and Readmitted Status',
+       x='Diagnostincs Measure',
+       y='')
+```
+
+Admission sickness relationships do not represent the pattern on readmission.
+
+
+
+
+
+```{r}
+data_select<-data%>%
+ filter(weight!='0')%>%
+  select(race:weight,medical_specialty,num_lab_procedures:number_inpatient,number_diagnoses,metformin:readmitted)
+  
+```
+
+
+```{r}
+data_select%>%
+  filter(race=='Caucasian')%>%
+  ggplot(aes(age,weight,color=readmitted))+
+  geom_point()+
+  facet_wrap(~readmitted)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+* Weight-age relationship at readmission positive;
+
+
+
+```{r}
+data_select%>%
+  group_by(race,gender,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)
 ```
 
 
 
+```{r}
+data_select%>%
+  group_by(race,gender,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)%>%
+  filter(race=='Caucasian')%>%
+  group_by(medical_specialty)%>%
+  top_n(5,n)%>%
+  ggplot(aes(age,
+             n,
+             size=weight,
+             color=factor(gender)))+
+  geom_point()+
+  geom_text_repel(aes(label=medical_specialty))+
+  facet_wrap(~readmitted, scales = 'free')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
 
+By Gender
+```{r}
+data_select%>%
+  group_by(race,gender,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)%>%
+  filter(race=='Caucasian',
+         gender=='Female',
+         medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  group_by(medical_specialty)%>%
+  #top_n(20,n)%>%
+  distinct(medical_specialty,age,.keep_all = TRUE)%>%
+  ggplot(aes(n,
+             age,
+             size=weight,
+             color=factor(medical_specialty)))+
+  geom_point()+
+  geom_text_repel(aes(label=medical_specialty),force = TRUE)+
+  guides(color=FALSE)+
+  facet_wrap(~readmitted, scales = 'free_x')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title = 'Relation Medical Traitment - Readmition',
+       subtitle = 'Female Case',
+       y='',
+       x='Total')
+```
+
+
+```{r}
+data_select%>%
+  group_by(race,gender,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)%>%
+  filter(race=='Caucasian',
+         gender!='Female',
+         medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  group_by(medical_specialty)%>%
+  #top_n(20,n)%>%
+  distinct(medical_specialty,age,.keep_all = TRUE)%>%
+  ggplot(aes(n,
+             age,
+             size=weight,
+             color=medical_specialty))+
+  geom_point()+
+  geom_text_repel(aes(label=medical_specialty),force = TRUE)+
+  facet_wrap(~readmitted, scales = 'free_x')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title = 'Relation Medical Traitment - Readmition',
+       subtitle = 'Male Case',
+       y='',
+       x='Total')
+```
+
+
+
+```{r}
+casuas<-data_select%>%
+  #filter(medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  group_by(race,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)%>%
+  filter(n>4,
+         race=='Caucasian',
+         readmitted=='YES')%>%
+  distinct(medical_specialty,age,.keep_all = TRUE)%>%
+  group_by(medical_specialty,age)%>%
+  summarize(avg_readmition = mean(n))%>%
+  mutate(age=reorder_within(age,avg_readmition,medical_specialty))%>%
+  mutate(mean_medial=mean(avg_readmition))%>%
+  ungroup()
+casuas%>%
+  ggplot(aes(avg_readmition,age,color=medical_specialty))+
+  geom_vline(data = casuas,mapping = aes(xintercept=mean_medial))+
+  geom_errorbar(aes(xmin=mean_medial,xmax=avg_readmition),width= 0,linetype='dashed')+
+  geom_point(aes(size=avg_readmition),show.legend = FALSE)+
+  scale_y_reordered()+
+  facet_wrap(~medical_specialty,scales = 'free')
+  
+```
+
+
+
+```{r}
+casuas<-data_select%>%
+  #filter(medical_specialty %in% top_medial_specialty$medical_specialty)%>%
+  group_by(race,age,weight,medical_specialty,readmitted)%>%
+  count(sort=TRUE)%>%
+  filter(n>4,
+         race=='Caucasian',
+         readmitted!='YES')%>%
+  distinct(medical_specialty,age,.keep_all = TRUE)%>%
+  group_by(medical_specialty,age)%>%
+  summarize(avg_readmition = mean(n))%>%
+  mutate(age=reorder_within(age,avg_readmition,medical_specialty))%>%
+  mutate(mean_medial=mean(avg_readmition))%>%
+  ungroup()
+casuas%>%
+  ggplot(aes(avg_readmition,age,color=medical_specialty))+
+  geom_vline(data = casuas,mapping = aes(xintercept=mean_medial))+
+  geom_errorbar(aes(xmin=mean_medial,xmax=avg_readmition),width= 0,linetype='dashed')+
+  geom_point(aes(size=avg_readmition),show.legend = FALSE)+
+  scale_y_reordered()+
+  facet_wrap(~medical_specialty,scales = 'free')
+  
+```
+
+```{r}
+data_select%>%
+  count(race)
+```
+
+
+
+```{r}
+data_select%>%
+  filter(readmitted=='YES')%>%
+  group_by(medical_specialty,race,age)%>%
+  count(sort=TRUE)%>%
+  summarize(avg_readmitted=mean(n))%>%
+  arrange(desc(avg_readmitted))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_readmitted,race))%>%
+  ggplot(aes(avg_readmitted,medical_specialty,color=age))+
+  geom_point(aes(size=avg_readmitted))+
+  scale_y_reordered()+
+  facet_wrap(~race, scales = 'free',nrow = 3)
+
+```
+```{r}
+data_select%>%
+  filter(readmitted!='YES')%>%
+  group_by(medical_specialty,race,age)%>%
+  count(sort=TRUE)%>%
+  filter(n>2,
+         age!='[20-30)')%>%
+  summarize(avg_readmitted=mean(n))%>%
+  arrange(desc(avg_readmitted))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_readmitted,age))%>%
+  ggplot(aes(avg_readmitted,medical_specialty,color=medical_specialty))+
+  geom_point(aes(size=avg_readmitted))+
+  scale_y_reordered()+
+  guides(color=FALSE,
+         size=FALSE)+
+  facet_wrap(~age, scales = 'free',nrow = 3)
+```
+
+```{r}
+data_select%>%
+  filter(readmitted=='YES')%>%
+  group_by(medical_specialty,race,age)%>%
+  count(sort=TRUE)%>%
+  filter(n>2,
+         age!='[20-30)',
+         race=='Caucasian')%>%
+  summarize(avg_readmitted=mean(n))%>%
+  arrange(desc(avg_readmitted))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_readmitted,age))%>%
+  ggplot(aes(avg_readmitted,medical_specialty,color=medical_specialty))+
+  geom_point(aes(size=avg_readmitted))+
+  scale_y_reordered()+
+  guides(color=FALSE,
+         size=FALSE)+
+  facet_wrap(~age, scales = 'free',nrow = 3)
+```
+
+```{r}
+data_select%>%
+  filter(readmitted=='YES')%>%
+  group_by(medical_specialty,race,weight)%>%
+  count(sort=TRUE)%>%
+  filter(n>2)%>%
+  summarize(avg_readmitted=mean(n))%>%
+  arrange(desc(avg_readmitted))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_readmitted,weight))%>%
+  ggplot(aes(avg_readmitted,medical_specialty,color=race))+
+  geom_point(aes(size=avg_readmitted))+
+  scale_y_reordered()+
+  guides(size=FALSE)+
+  facet_wrap(~weight, scales = 'free',nrow = 3)
+```
+
+
+
+```{r}
+data_select%>%
+  filter(readmitted!='YES')%>%
+  group_by(medical_specialty,race,weight)%>%
+  count(sort=TRUE)%>%
+  filter(n>2)%>%
+  summarize(avg_readmitted=mean(n))%>%
+  arrange(desc(avg_readmitted))%>%
+  ungroup()%>%
+  mutate(medical_specialty=reorder_within(medical_specialty,avg_readmitted,weight))%>%
+  ggplot(aes(avg_readmitted,medical_specialty,color=race))+
+  geom_point(aes(size=avg_readmitted))+
+  scale_y_reordered()+
+  guides(size=FALSE)+
+  facet_wrap(~weight, scales = 'free',nrow = 3)
+```
+
+## Build Model and Machine Learning Interpretability
+
+```{r}
+data_select$readmitted<-as.factor(data_select$readmitted)
+set.seed(1234)
+readmitted_split <- initial_split(data_select, strata = readmitted)
+readmitted_train <- training(readmitted_split)
+readmitted_test <- testing(readmitted_split)
+```
+
+```{r}
+readmitted_rec <- recipe(readmitted ~ ., data = readmitted_train) %>%
+    step_normalize(all_numeric())%>%
+    step_other(num_lab_procedures, num_procedures,threshold = 0.005)%>%
+    step_downsample(readmitted)
+
+tree_prep <- prep(readmitted_rec)
+juiced <- juice(tree_prep)
+```
+
+
+```{r}
+tune_spec <- rand_forest(
+  mtry = tune(),
+  trees = 100,
+  min_n = tune()
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+
+tune_wf <- workflow() %>%
+  add_recipe(readmitted_rec) %>%
+  add_model(tune_spec)
+```
+
+
+
+```{r}
+set.seed(234)
+readmitted_folds <- vfold_cv(readmitted_train)
+doParallel::registerDoParallel()
+
+set.seed(345)
+tune_res <- tune_grid(
+  tune_wf,
+  resamples = readmitted_folds,
+  grid = 10
+)
+tune_res
+```
+
+
+
+```{r}
+tune_res %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC")
+```
+
+
+
+```{r}
+rf_grid <- grid_regular(
+  mtry(range = c(0,25)),
+  min_n(range = c(10, 35)),
+  levels = 5)
+
+set.seed(456)
+
+regular_res <- tune_grid(
+  tune_wf,
+  resamples = readmitted_folds,
+  grid = rf_grid
+)
+```
 
