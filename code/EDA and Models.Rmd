@@ -15,6 +15,7 @@ library(skimr)
 library(scales)
 library(ggrepel)
 library(skimr)
+library(vip)
 theme_set(theme_classic())
 ```
 
@@ -514,5 +515,23 @@ regular_res <- tune_grid(
   resamples = readmitted_folds,
   grid = rf_grid
 )
+best_auc <- select_best(regular_res, "roc_auc")
+final_rf <- finalize_model(
+  tune_spec,
+  best_auc
+)
+
+final_rf
+```
+
+
+
+```{r}
+final_rf %>%
+  set_engine("ranger", importance = "permutation") %>%
+  fit(readmitted ~ .,
+    data = juice(tree_prep) 
+  ) %>%
+  vip(geom = "point")
 ```
 
